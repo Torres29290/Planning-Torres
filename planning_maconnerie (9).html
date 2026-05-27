@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planning Torres</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:system-ui,sans-serif;background:#e8e8e5;color:#1a1a18;padding:20px;}
+h1{font-size:22px;font-weight:700;margin-bottom:2px;}
+.subtitle{font-size:13px;color:#999;margin-bottom:14px;}
+
+.toolbar{display:flex;align-items:center;gap:8px;padding:10px 0 14px;flex-wrap:wrap;}
+.toolbar input[type=text],.toolbar input[type=date],.toolbar select,.toolbar input[type=number]{
+  font-size:14px;padding:6px 10px;border:1px solid #ddd;border-radius:8px;
+  background:#fff;color:#1a1a18;height:36px;outline:none;}
+.toolbar input[type=text]{width:180px;}
+.toolbar select{width:120px;}
+.toolbar input[type=date]{width:152px;}
+.toolbar input[type=number]{width:64px;}
+.toolbar input:focus,.toolbar select:focus{border-color:#378ADD;}
+.label-sm{font-size:13px;color:#888;}
+
+.btn{height:36px;padding:0 13px;border:1px solid #ddd;border-radius:8px;
+  background:#fff;color:#1a1a18;font-size:13px;cursor:pointer;
+  display:flex;align-items:center;gap:5px;white-space:nowrap;transition:background .12s;}
+.btn:hover{background:#ebebea;}
+.btn.primary{background:#185FA5;border-color:#185FA5;color:#fff;}
+.btn.primary:hover{background:#0C447C;}
+.btn.green{background:#0e7c5b;border-color:#0e7c5b;color:#fff;}
+.btn.green:hover{background:#085041;}
+.btn.danger{background:#fff;border-color:#ddd;color:#A32D2D;}
+.btn.danger:hover{background:#fdf0f0;}
+.btn.sm{height:28px;font-size:12px;padding:0 9px;}
+.btn.active{background:#eaf2ff;border-color:#378ADD;color:#185FA5;}
+
+.week-nav{display:flex;align-items:center;gap:6px;}
+.week-label{font-size:14px;font-weight:600;min-width:240px;text-align:center;}
+
+.sync-row{display:flex;align-items:center;gap:6px;}
+.sync-dot{width:9px;height:9px;border-radius:50%;background:#ccc;transition:background .3s;}
+.sync-dot.ok{background:#2A9A18;}
+.sync-dot.syncing{background:#EF9F27;}
+.sync-dot.error{background:#C93B6A;}
+.sync-label{font-size:12px;color:#888;}
+
+.teams-panel{background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:14px;margin-bottom:14px;display:none;}
+.teams-panel.open{display:block;}
+.teams-panel h3{font-size:14px;font-weight:600;margin-bottom:10px;}
+.team-row-edit{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+.team-row-edit input{font-size:13px;padding:5px 8px;border:1px solid #ddd;border-radius:7px;flex:1;outline:none;}
+.team-row-edit input:focus{border-color:#378ADD;}
+.color-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+
+/* ── Drag-to-navigate side zones ── */
+.drag-nav-zone{
+  position:fixed;top:0;width:80px;height:100vh;z-index:50;
+  display:flex;align-items:center;justify-content:center;
+  pointer-events:none;opacity:0;transition:opacity .2s;
+}
+.drag-nav-zone.left{left:0;background:linear-gradient(to right,rgba(55,138,221,.25),transparent);}
+.drag-nav-zone.right{right:0;background:linear-gradient(to left,rgba(55,138,221,.25),transparent);}
+.drag-nav-zone .arrow{font-size:36px;color:#185FA5;text-shadow:0 2px 8px rgba(0,0,0,.2);}
+.drag-nav-zone.active{opacity:1;pointer-events:all;}
+
+/* Grid */
+.grid-outer{display:flex;align-items:stretch;gap:0;}
+.grid-wrap{overflow-x:auto;border-radius:12px;border:1px solid #ccc;box-shadow:0 1px 6px rgba(0,0,0,.08);flex:1;}
+table{border-collapse:collapse;width:100%;}
+thead th{font-size:12px;font-weight:700;color:#444;padding:9px 4px;
+  border-bottom:2px solid #ccc;text-align:center;white-space:nowrap;background:#ddddd9;}
+thead th.team-col{text-align:left;padding-left:10px;min-width:90px;width:90px;}
+thead th.weekend-head{background:#c8c8c4;color:#888;}
+thead th.today-head{background:#c8dff5;color:#185FA5;font-weight:700;}
+
+tbody tr:nth-child(odd) td{background:#f2f2ef;}
+tbody tr:nth-child(even) td{background:#e2e2de;}
+tbody tr td.weekend{background:#c4c4c0 !important;}
+tbody tr td.today{background:#d4eafc !important;}
+tbody tr{border-bottom:2px solid #c8c8c4;}
+tbody tr:last-child{border-bottom:none;}
+
+td.team-name{font-size:13px;font-weight:700;padding:8px 8px;white-space:nowrap;
+  border-right:2px solid #c8c8c4;width:90px;vertical-align:top;}
+td.team-name .rename-btn{opacity:0;font-size:11px;cursor:pointer;margin-left:3px;color:#888;}
+td.team-name:hover .rename-btn{opacity:1;}
+
+td.day-cell{min-width:110px;vertical-align:top;padding:4px 4px 0;border-right:1px solid #c8c8c4;position:relative;}
+td.day-cell:last-child{border-right:none;}
+td.day-cell.weekend .no-drop-hint{display:block;font-size:12px;color:#999;text-align:center;padding:10px 2px;font-style:italic;pointer-events:none;}
+td.day-cell:not(.weekend) .no-drop-hint{display:none;}
+
+.task-card{border-radius:7px;padding:5px 24px 5px 8px;font-size:13px;font-weight:600;
+  cursor:grab;user-select:none;position:relative;margin-bottom:3px;
+  line-height:1.4;border-left:3px solid transparent;}
+.task-card:active{cursor:grabbing;opacity:.65;}
+.task-card .del{position:absolute;top:50%;right:5px;transform:translateY(-50%);
+  font-size:12px;cursor:pointer;opacity:0;}
+.task-card:hover .del{opacity:.8;}
+.task-card .dur-badge{display:inline-block;font-size:11px;font-weight:500;
+  opacity:.65;margin-left:5px;background:rgba(0,0,0,.1);border-radius:3px;padding:0 3px;}
+
+.task-note-preview{font-size:12px;cursor:pointer;padding:2px 0 0 2px;opacity:.8;line-height:1.3;margin-bottom:2px;}
+.task-note-preview:hover{opacity:1;text-decoration:underline;}
+
+.task-cont{border-radius:7px;padding:4px 8px;font-size:12px;font-style:italic;
+  margin-bottom:3px;opacity:.65;border-left:3px solid transparent;user-select:none;}
+
+/* Day note — bigger font */
+.day-note-wrap{padding:3px 2px 5px;}
+.day-note{width:100%;font-size:13px;border:1px solid transparent;border-radius:5px;
+  padding:3px 5px;resize:none;font-family:inherit;color:#444;background:transparent;
+  outline:none;min-height:26px;line-height:1.4;}
+.day-note:hover{background:rgba(255,255,255,.75);border-color:#ddd;}
+.day-note:focus{background:#fffef5;border-color:#EF9F27;}
+.day-note::placeholder{color:#bbb;font-size:12px;}
+
+.drag-over{outline:2px dashed #378ADD;background:rgba(55,138,221,.1) !important;}
+.empty-hint{font-size:12px;color:#aaa;padding:4px 4px;}
+
+.mode-bar{display:flex;align-items:center;gap:10px;padding:7px 12px;background:#fff8e6;
+  border:1px solid #f0c060;border-radius:8px;margin-bottom:10px;font-size:13px;color:#7a5000;}
+.mode-bar.hidden{display:none;}
+
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:100;align-items:center;justify-content:center;}
+.modal-bg.open{display:flex;}
+.modal{background:#fff;border-radius:12px;padding:24px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.18);}
+.modal h3{font-size:16px;font-weight:600;margin-bottom:14px;}
+.modal input,.modal textarea{width:100%;font-size:14px;padding:8px 10px;border:1px solid #ddd;border-radius:8px;outline:none;margin-bottom:12px;font-family:inherit;}
+.modal textarea{min-height:90px;resize:vertical;}
+.modal input:focus,.modal textarea:focus{border-color:#378ADD;}
+.modal .modal-actions{display:flex;gap:8px;justify-content:flex-end;}
+.loading{text-align:center;padding:40px;font-size:14px;color:#888;}
+</style>
+</head>
+<body>
+
+<!-- Drag-to-navigate zones -->
+<div class="drag-nav-zone left" id="nav-left"><span class="arrow">◀</span></div>
+<div class="drag-nav-zone right" id="nav-right"><span class="arrow">▶</span></div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;flex-wrap:wrap;gap:8px;">
+  <h1>📋 Planning Torres</h1>
+  <div class="sync-row">
+    <span class="sync-dot" id="sync-dot"></span>
+    <span class="sync-label" id="sync-label">Connexion…</span>
+  </div>
+</div>
+<p class="subtitle">Synchronisé en temps réel · Glisser vers les bords ◀ ▶ pour changer de semaine</p>
+
+<div class="teams-panel" id="teams-panel">
+  <h3>⚙️ Gestion des équipes</h3>
+  <div id="team-rows"></div>
+  <div style="display:flex;gap:8px;margin-top:8px;">
+    <button class="btn green sm" id="add-team-btn">+ Ajouter une équipe</button>
+  </div>
+</div>
+
+<div class="toolbar">
+  <div class="week-nav">
+    <button class="btn" id="prev">&#8592;</button>
+    <span class="week-label" id="week-label"></span>
+    <button class="btn" id="next">&#8594;</button>
+  </div>
+  <input type="text" id="task-name" placeholder="Nom de l'intervention" />
+  <select id="team-sel"></select>
+  <input type="date" id="task-date" />
+  <input type="number" id="task-dur" value="1" min="1" max="60" />
+  <span class="label-sm">jour(s)</span>
+  <button class="btn primary" id="add-btn">+ Ajouter</button>
+  <div style="margin-left:auto;display:flex;gap:6px;">
+    <button class="btn active" id="toggle-cascade">🔗 Entraîner le reste</button>
+    <button class="btn" id="toggle-teams">⚙️ Équipes</button>
+  </div>
+</div>
+
+<div class="mode-bar hidden" id="mode-bar">
+  ✋ Mode <strong>déplacement libre</strong> — les interventions suivantes ne bougent pas.
+</div>
+
+<div id="loading" class="loading">⏳ Chargement du planning…</div>
+
+<div class="grid-wrap" id="grid-wrap" style="display:none;">
+  <table id="grid">
+    <thead id="grid-head"></thead>
+    <tbody id="grid-body"></tbody>
+  </table>
+</div>
+
+<!-- Modals -->
+<div class="modal-bg" id="rename-modal">
+  <div class="modal">
+    <h3>✏️ Renommer l'équipe</h3>
+    <input type="text" id="rename-input" placeholder="Nouveau nom" />
+    <div class="modal-actions">
+      <button class="btn" id="rename-cancel">Annuler</button>
+      <button class="btn primary" id="rename-ok">Valider</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="task-note-modal">
+  <div class="modal">
+    <h3>📝 Note de l'intervention</h3>
+    <input type="text" id="tn-name" readonly style="background:#f5f5f3;font-weight:600;" />
+    <textarea id="tn-text" placeholder="Adresse, consigne, matériaux…"></textarea>
+    <div class="modal-actions">
+      <button class="btn" id="tn-cancel">Annuler</button>
+      <button class="btn primary" id="tn-ok">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBbBeqKfhDsZOGdg2-f8Oe0MlU2DuFMFrI",
+  authDomain: "planning-torres.firebaseapp.com",
+  databaseURL: "https://planning-torres-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "planning-torres",
+  storageBucket: "planning-torres.firebasestorage.app",
+  messagingSenderId: "714439192020",
+  appId: "1:714439192020:web:3acf560fa799cbad9dba41"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const planningRef = ref(db, 'planning');
+
+const DEFAULT_STATE = {
+  teams:['Éq. 1','Éq. 2','Éq. 3','Éq. 4','Éq. 5'],
+  tasks:[],notes:{},taskNotes:{},taskId:0
+};
+
+let state=null;
+let weekStart=getMonday(new Date());
+let dragTask=null;
+let renameTarget=null;
+let cascadeMode=true;
+let taskNoteTarget=null;
+let navTimer=null; // for auto-navigate on hover
+
+// ── Sync UI ────────────────────────────────────────────
+function setSyncStatus(s){
+  const dot=document.getElementById('sync-dot'),lbl=document.getElementById('sync-label');
+  if(s==='ok'){dot.className='sync-dot ok';lbl.textContent='Synchronisé';}
+  else if(s==='saving'){dot.className='sync-dot syncing';lbl.textContent='Sauvegarde…';}
+  else if(s==='error'){dot.className='sync-dot error';lbl.textContent='Erreur réseau';}
+  else{dot.className='sync-dot syncing';lbl.textContent='Connexion…';}
+}
+function save(){
+  setSyncStatus('saving');
+  set(planningRef,state).then(()=>setSyncStatus('ok')).catch(()=>setSyncStatus('error'));
+}
+
+// ── Firebase ───────────────────────────────────────────
+onValue(planningRef,snap=>{
+  const data=snap.val();
+  if(data){
+    state=data;
+    if(!state.notes)state.notes={};
+    if(!state.taskNotes)state.taskNotes={};
+    if(!state.tasks)state.tasks=[];
+    if(!state.teams)state.teams=[...DEFAULT_STATE.teams];
+  } else {
+    state=JSON.parse(JSON.stringify(DEFAULT_STATE));
+    save();
+  }
+  document.getElementById('loading').style.display='none';
+  document.getElementById('grid-wrap').style.display='';
+  setSyncStatus('ok');
+  renderTeamsPanel();
+  renderGrid();
+},()=>{setSyncStatus('error');document.getElementById('loading').textContent='❌ Erreur Firebase.';});
+
+// ── Helpers ────────────────────────────────────────────
+const PALETTE=[
+  {bg:'#C8E0F7',border:'#2F7DC8',text:'#0C3666'},
+  {bg:'#B8ECD8',border:'#1A9966',text:'#074D30'},
+  {bg:'#FAE2B0',border:'#D4820A',text:'#5C3200'},
+  {bg:'#F5C6D8',border:'#C93B6A',text:'#5E0F2D'},
+  {bg:'#D5CFFC',border:'#6B5CE7',text:'#2B1785'},
+  {bg:'#FFD8B8',border:'#D4620A',text:'#5C2200'},
+  {bg:'#C8F0C0',border:'#2A9A18',text:'#0F4408'},
+  {bg:'#E8D8F8',border:'#8B3FCC',text:'#3A0D6E'},
+];
+const DAYS=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+function color(ti){return PALETTE[ti%PALETTE.length];}
+function getWeekNumber(d){
+  const dt=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const day=dt.getUTCDay()||7;dt.setUTCDate(dt.getUTCDate()+4-day);
+  const y=new Date(Date.UTC(dt.getUTCFullYear(),0,1));
+  return Math.ceil((((dt-y)/86400000)+1)/7);
+}
+function getMonday(d){
+  const day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1),m=new Date(d);
+  m.setDate(diff);m.setHours(0,0,0,0);return m;
+}
+function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
+function fmtDate(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function fmtDisplay(d){return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});}
+function getWeekDates(){return Array.from({length:7},(_,i)=>addDays(weekStart,i));}
+function skipWeekend(ds){
+  const d=new Date(ds),day=d.getDay();
+  if(day===6)d.setDate(d.getDate()+2);
+  else if(day===0)d.setDate(d.getDate()+1);
+  return fmtDate(d);
+}
+function workingDayOffset(start,n){
+  if(n===0)return start;
+  let d=new Date(start),c=0;
+  while(c<n){d.setDate(d.getDate()+1);const day=d.getDay();if(day!==0&&day!==6)c++;}
+  return fmtDate(d);
+}
+function calDiff(a,b){return(new Date(b)-new Date(a))/86400000;}
+
+// ── Drag-to-navigate zones ─────────────────────────────
+// Show zones while dragging, auto-navigate after 800ms hover
+let isDragging=false;
+
+function showNavZones(show){
+  document.getElementById('nav-left').classList.toggle('active',show);
+  document.getElementById('nav-right').classList.toggle('active',show);
+}
+
+['nav-left','nav-right'].forEach(id=>{
+  const zone=document.getElementById(id);
+  const dir=id==='nav-left'?-7:7;
+
+  zone.addEventListener('dragenter',e=>{
+    e.preventDefault();
+    if(!isDragging)return;
+    // Trigger navigation after 800ms
+    navTimer=setTimeout(()=>{
+      weekStart=addDays(weekStart,dir);
+      renderGrid();
+    },800);
+  });
+  zone.addEventListener('dragover',e=>{e.preventDefault();});
+  zone.addEventListener('dragleave',()=>{
+    clearTimeout(navTimer);navTimer=null;
+  });
+  zone.addEventListener('drop',e=>{
+    e.preventDefault();
+    clearTimeout(navTimer);navTimer=null;
+    // Navigate + let user drop on a cell
+    weekStart=addDays(weekStart,dir);
+    renderGrid();
+  });
+});
+
+// ── Cascade toggle ─────────────────────────────────────
+document.getElementById('toggle-cascade').addEventListener('click',()=>{
+  cascadeMode=!cascadeMode;
+  const btn=document.getElementById('toggle-cascade'),bar=document.getElementById('mode-bar');
+  if(cascadeMode){btn.classList.add('active');btn.textContent='🔗 Entraîner le reste';bar.classList.add('hidden');}
+  else{btn.classList.remove('active');btn.textContent='✋ Déplacement libre';bar.classList.remove('hidden');}
+});
+
+// ── Teams panel ────────────────────────────────────────
+function renderTeamsPanel(){
+  if(!state)return;
+  const sel=document.getElementById('team-sel'),prev=sel.value;
+  sel.innerHTML=state.teams.map((n,i)=>`<option value="${i}">${n}</option>`).join('');
+  if(prev&&parseInt(prev)<state.teams.length)sel.value=prev;
+  const rows=document.getElementById('team-rows');
+  rows.innerHTML='';
+  state.teams.forEach((name,ti)=>{
+    const c=color(ti),row=document.createElement('div');
+    row.className='team-row-edit';
+    row.innerHTML=`<span class="color-dot" style="background:${c.border}"></span>
+      <input type="text" value="${name}" data-ti="${ti}" />
+      ${state.teams.length>1?`<button class="btn danger sm" data-del="${ti}">✕</button>`:''}`;
+    row.querySelector('input').addEventListener('change',e=>{state.teams[ti]=e.target.value.trim()||name;save();renderTeamsPanel();renderGrid();});
+    const db=row.querySelector('[data-del]');
+    if(db)db.addEventListener('click',()=>deleteTeam(ti));
+    rows.appendChild(row);
+  });
+}
+function deleteTeam(ti){
+  if(state.teams.length<=1)return;
+  if(!confirm(`Supprimer "${state.teams[ti]}" et ses interventions ?`))return;
+  state.teams.splice(ti,1);
+  state.tasks=state.tasks.filter(t=>t.team!==ti).map(t=>({...t,team:t.team>ti?t.team-1:t.team}));
+  save();renderTeamsPanel();renderGrid();
+}
+document.getElementById('add-team-btn').addEventListener('click',()=>{state.teams.push('Éq. '+(state.teams.length+1));save();renderTeamsPanel();renderGrid();});
+document.getElementById('toggle-teams').addEventListener('click',()=>document.getElementById('teams-panel').classList.toggle('open'));
+document.getElementById('rename-cancel').addEventListener('click',()=>document.getElementById('rename-modal').classList.remove('open'));
+document.getElementById('rename-ok').addEventListener('click',()=>{
+  const v=document.getElementById('rename-input').value.trim();
+  if(v&&renameTarget!==null){state.teams[renameTarget]=v;save();renderTeamsPanel();renderGrid();}
+  document.getElementById('rename-modal').classList.remove('open');
+});
+
+// ── Task note modal ────────────────────────────────────
+document.getElementById('tn-cancel').addEventListener('click',()=>document.getElementById('task-note-modal').classList.remove('open'));
+document.getElementById('tn-ok').addEventListener('click',()=>{
+  if(taskNoteTarget!==null){state.taskNotes[taskNoteTarget]=document.getElementById('tn-text').value;save();renderGrid();}
+  document.getElementById('task-note-modal').classList.remove('open');
+});
+function openTaskNote(taskId,taskName){
+  taskNoteTarget=taskId;
+  document.getElementById('tn-name').value=taskName;
+  document.getElementById('tn-text').value=(state.taskNotes&&state.taskNotes[taskId])||'';
+  document.getElementById('task-note-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('tn-text').focus(),50);
+}
+
+// ── Grid ───────────────────────────────────────────────
+function renderGrid(){
+  if(!state)return;
+  const dates=getWeekDates();
+  const today=fmtDate(new Date());
+  const wn=getWeekNumber(weekStart);
+  document.getElementById('week-label').textContent=`Semaine ${wn} — ${fmtDisplay(dates[0])} au ${fmtDisplay(dates[6])}`;
+
+  const head=document.getElementById('grid-head');
+  head.innerHTML='<tr><th class="team-col">Équipe</th>'+
+    dates.map((d,i)=>{
+      const isWe=i>=5,isToday=fmtDate(d)===today;
+      let cls=isWe?'weekend-head':'';if(isToday)cls='today-head';
+      return `<th class="${cls}">${DAYS[i]}<br><span style="font-weight:400;font-size:11px;">${fmtDisplay(d)}</span></th>`;
+    }).join('')+'</tr>';
+
+  const startMap={},contMap={};
+  state.tasks.forEach(task=>{
+    const sk=`${task.team}_${task.date}`;
+    if(!startMap[sk])startMap[sk]=[];
+    startMap[sk].push(task);
+    const dur=task.duration||1;
+    for(let i=1;i<dur;i++){
+      const ck=`${task.team}_${workingDayOffset(task.date,i)}`;
+      if(!contMap[ck])contMap[ck]=[];
+      contMap[ck].push(task);
+    }
+  });
+
+  const body=document.getElementById('grid-body');
+  body.innerHTML='';
+
+  state.teams.forEach((name,ti)=>{
+    const c=color(ti);
+    const tr=document.createElement('tr');
+    const nameTd=document.createElement('td');
+    nameTd.className='team-name';
+    nameTd.style.borderLeft=`4px solid ${c.border}`;
+    nameTd.innerHTML=`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c.border};margin-right:4px;"></span>${name}<span class="rename-btn" data-ti="${ti}">✏️</span>`;
+    nameTd.querySelector('.rename-btn').addEventListener('click',e=>{
+      renameTarget=parseInt(e.target.dataset.ti);
+      document.getElementById('rename-input').value=state.teams[renameTarget];
+      document.getElementById('rename-modal').classList.add('open');
+      setTimeout(()=>document.getElementById('rename-input').select(),50);
+    });
+    tr.appendChild(nameTd);
+
+    dates.forEach((d,di)=>{
+      const dateStr=fmtDate(d),isWe=di>=5;
+      const td=document.createElement('td');
+      td.className='day-cell'+(isWe?' weekend':'')+(fmtDate(d)===today?' today':'');
+      td.dataset.team=ti;td.dataset.date=dateStr;
+
+      if(isWe){td.innerHTML='<span class="no-drop-hint">week-end</span>';tr.appendChild(td);return;}
+
+      const sk=`${ti}_${dateStr}`;
+      const starts=startMap[sk]||[],conts=contMap[sk]||[];
+
+      conts.forEach(task=>{
+        const card=document.createElement('div');
+        card.className='task-cont';
+        card.style.background=c.bg;card.style.borderLeftColor=c.border;card.style.color=c.text;
+        card.textContent='↳ '+task.name;
+        td.appendChild(card);
+      });
+
+      if(starts.length===0&&conts.length===0){
+        const hint=document.createElement('div');hint.className='empty-hint';hint.textContent='déposer ici';
+        td.appendChild(hint);
+      }
+
+      starts.forEach(task=>{
+        const card=document.createElement('div');
+        card.className='task-card';card.draggable=true;
+        card.style.background=c.bg;card.style.borderLeftColor=c.border;card.style.color=c.text;
+        const dur=task.duration||1;
+        card.innerHTML=`${task.name}${dur>1?`<span class="dur-badge">${dur}j</span>`:''}<span class="del" data-id="${task.id}">✕</span>`;
+        card.addEventListener('dragstart',e=>{
+          dragTask=task;isDragging=true;
+          showNavZones(true);
+          e.dataTransfer.effectAllowed='move';
+        });
+        card.addEventListener('dragend',()=>{
+          isDragging=false;showNavZones(false);
+          clearTimeout(navTimer);navTimer=null;
+          document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
+        });
+        card.querySelector('.del').addEventListener('click',e=>{e.stopPropagation();removeTask(task.id,dateStr,ti);});
+
+        // Note preview
+        const notePreview=document.createElement('div');
+        notePreview.className='task-note-preview';
+        notePreview.style.color=c.text;
+        const noteVal=(state.taskNotes&&state.taskNotes[task.id])||'';
+        notePreview.textContent=noteVal?'📝 '+noteVal.substring(0,45)+(noteVal.length>45?'…':''):'+ ajouter une note';
+        notePreview.addEventListener('click',e=>{e.stopPropagation();openTaskNote(task.id,task.name);});
+
+        td.appendChild(card);
+        td.appendChild(notePreview);
+      });
+
+      // Day note
+      const dw=document.createElement('div');dw.className='day-note-wrap';
+      const dn=document.createElement('textarea');
+      dn.className='day-note';dn.placeholder='📝 note du jour…';dn.rows=1;
+      dn.value=state.notes[`${ti}_${dateStr}`]||'';
+      dn.addEventListener('change',e=>{state.notes[`${ti}_${dateStr}`]=e.target.value;save();});
+      dn.addEventListener('dragover',e=>e.stopPropagation());
+      dw.appendChild(dn);td.appendChild(dw);
+
+      td.addEventListener('dragover',e=>{e.preventDefault();td.classList.add('drag-over');});
+      td.addEventListener('dragleave',()=>td.classList.remove('drag-over'));
+      td.addEventListener('drop',e=>{
+        e.preventDefault();td.classList.remove('drag-over');
+        if(!dragTask)return;
+        moveTask(dragTask.id,parseInt(td.dataset.team),td.dataset.date);
+        dragTask=null;
+      });
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+}
+
+function removeTask(id,date,team){
+  const idx=state.tasks.findIndex(t=>t.id===id);
+  if(idx===-1)return;
+  state.tasks.splice(idx,1);
+  if(cascadeMode){
+    state.tasks.filter(t=>t.team===team&&t.date>date)
+      .sort((a,b)=>a.date.localeCompare(b.date))
+      .forEach(t=>{let d=new Date(t.date);do{d.setDate(d.getDate()-1);}while(d.getDay()===0||d.getDay()===6);t.date=fmtDate(d);});
+  }
+  save();renderGrid();
+}
+
+function moveTask(id,newTeam,newDate){
+  const task=state.tasks.find(t=>t.id===id);
+  if(!task)return;
+  const oldDate=task.date,oldTeam=task.team;
+  if(oldDate===newDate&&oldTeam===newTeam)return;
+  const dayDiff=calDiff(oldDate,newDate);
+  if(cascadeMode){
+    const following=state.tasks.filter(t=>t.team===oldTeam&&t.id!==id&&t.date>oldDate).sort((a,b)=>a.date.localeCompare(b.date));
+    task.date=newDate;task.team=newTeam;
+    following.forEach(t=>{const s=fmtDate(addDays(new Date(t.date),dayDiff));t.date=skipWeekend(s);});
+  } else {
+    task.date=newDate;task.team=newTeam;
+  }
+  save();renderGrid();
+}
+
+document.getElementById('prev').addEventListener('click',()=>{weekStart=addDays(weekStart,-7);renderGrid();});
+document.getElementById('next').addEventListener('click',()=>{weekStart=addDays(weekStart,7);renderGrid();});
+
+document.getElementById('add-btn').addEventListener('click',()=>{
+  if(!state)return;
+  const name=document.getElementById('task-name').value.trim();
+  const dateVal=document.getElementById('task-date').value;
+  const team=parseInt(document.getElementById('team-sel').value);
+  const dur=Math.max(1,parseInt(document.getElementById('task-dur').value)||1);
+  if(!name||!dateVal)return;
+  const safeDate=skipWeekend(dateVal);
+  state.tasks.push({id:state.taskId++,name,date:safeDate,team,duration:dur});
+  save();
+  const td=new Date(safeDate);
+  if(td<weekStart||td>addDays(weekStart,6))weekStart=getMonday(td);
+  document.getElementById('task-name').value='';
+  document.getElementById('task-dur').value='1';
+  renderGrid();
+});
+document.getElementById('task-name').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('add-btn').click();});
+document.getElementById('task-date').value=fmtDate(new Date());
+</script>
+</body>
+</html>
