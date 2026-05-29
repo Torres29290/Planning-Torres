@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Planning Torres — Vue chantier</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:system-ui,sans-serif;background:#e8e8e5;color:#1a1a18;padding:16px;font-size:15px;}
+h1{font-size:22px;font-weight:700;margin-bottom:2px;}
+.subtitle{font-size:13px;color:#999;margin-bottom:12px;}
+.badge{display:inline-block;background:#0e7c5b;color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;margin-left:8px;vertical-align:middle;}
+.btn{height:36px;padding:0 12px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#1a1a18;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;}
+.btn:hover{background:#ebebea;}
+.week-nav{display:flex;align-items:center;gap:5px;margin-bottom:14px;}
+.week-label{font-size:14px;font-weight:600;min-width:230px;text-align:center;}
+.sync-row{display:flex;align-items:center;gap:6px;margin-bottom:10px;}
+.sync-dot{width:9px;height:9px;border-radius:50%;background:#ccc;}
+.sync-dot.ok{background:#2A9A18;}
+.sync-label{font-size:12px;color:#888;}
+
+.chantiers-box{background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:14px;margin-bottom:12px;}
+.chantiers-box h3{font-size:14px;font-weight:700;margin-bottom:6px;}
+.chantiers-content{font-size:14px;color:#444;white-space:pre-wrap;line-height:1.5;}
+
+.grid-wrap{overflow-x:auto;border-radius:12px;border:1px solid #ccc;box-shadow:0 1px 6px rgba(0,0,0,.08);}
+table{border-collapse:collapse;width:100%;}
+thead th{font-size:12px;font-weight:700;color:#444;padding:9px 4px;border-bottom:2px solid #ccc;text-align:center;white-space:nowrap;background:#ddddd9;}
+thead th.team-col{text-align:left;padding-left:10px;min-width:88px;width:88px;}
+thead th.weekend-head{background:#c8c8c4;color:#888;}
+thead th.today-head{background:#c8dff5;color:#185FA5;font-weight:700;}
+tbody tr:nth-child(odd) td{background:#f2f2ef;}
+tbody tr:nth-child(even) td{background:#e2e2de;}
+tbody tr td.weekend{background:#c4c4c0 !important;}
+tbody tr td.today{background:#d4eafc !important;}
+tbody tr{border-bottom:2px solid #c8c8c4;}
+tbody tr:last-child{border-bottom:none;}
+td.team-name{font-size:13px;font-weight:700;padding:7px 7px;white-space:nowrap;border-right:2px solid #c8c8c4;width:88px;vertical-align:top;}
+td.day-cell{min-width:125px;vertical-align:top;padding:4px 4px 3px;border-right:1px solid #c8c8c4;}
+td.day-cell:last-child{border-right:none;}
+td.day-cell.weekend .no-we{display:block;font-size:12px;color:#999;text-align:center;padding:10px 2px;font-style:italic;}
+td.day-cell:not(.weekend) .no-we{display:none;}
+.task-card{border-radius:7px;padding:6px 8px;font-size:13px;font-weight:600;margin-bottom:3px;line-height:1.4;border-left:3px solid transparent;}
+.task-cont{border-radius:7px;padding:4px 8px;font-size:12px;font-style:italic;margin-bottom:3px;opacity:.65;border-left:3px solid transparent;}
+.task-note{font-size:12px;padding:1px 0 3px 2px;opacity:.75;line-height:1.3;margin-bottom:2px;}
+.task-attach{font-size:12px;padding:1px 0 3px 2px;opacity:.7;cursor:pointer;}
+.task-attach:hover{opacity:1;}
+.task-dur{display:inline-block;font-size:11px;font-weight:500;opacity:.65;margin-left:4px;background:rgba(0,0,0,.1);border-radius:3px;padding:0 3px;}
+.realise-row{display:flex;align-items:center;gap:4px;margin:4px 0 3px;font-size:13px;}
+.realise-val{color:#1a5c1a;font-style:italic;}
+.day-note-val{font-size:13px;color:#555;padding:2px 0 4px 2px;white-space:pre-wrap;line-height:1.4;}
+.loading{text-align:center;padding:40px;font-size:14px;color:#888;}
+</style>
+</head>
+<body>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;flex-wrap:wrap;gap:8px;">
+  <h1>📋 Planning Torres <span class="badge">Vue chantier</span></h1>
+</div>
+<p class="subtitle">Lecture seule · Mis à jour en temps réel</p>
+<div class="sync-row"><span class="sync-dot" id="sync-dot"></span><span class="sync-label" id="sync-label">Connexion…</span></div>
+
+<div class="chantiers-box" id="chantiers-box" style="display:none;">
+  <h3>🏗️ Chantiers à placer</h3>
+  <div class="chantiers-content" id="chantiers-content"></div>
+</div>
+
+<div class="week-nav">
+  <button class="btn" id="prev">&#8592;</button>
+  <span class="week-label" id="week-label"></span>
+  <button class="btn" id="next">&#8594;</button>
+</div>
+
+<div id="loading" class="loading">⏳ Chargement…</div>
+<div class="grid-wrap" id="grid-wrap" style="display:none;">
+  <table><thead id="grid-head"></thead><tbody id="grid-body"></tbody></table>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+const firebaseConfig={apiKey:"AIzaSyBbBeqKfhDsZOGdg2-f8Oe0MlU2DuFMFrI",authDomain:"planning-torres.firebaseapp.com",databaseURL:"https://planning-torres-default-rtdb.europe-west1.firebasedatabase.app",projectId:"planning-torres",storageBucket:"planning-torres.firebasestorage.app",messagingSenderId:"714439192020",appId:"1:714439192020:web:3acf560fa799cbad9dba41"};
+const app=initializeApp(firebaseConfig);
+const db=getDatabase(app);
+const planningRef=ref(db,'planning');
+let state=null,weekStart=getMonday(new Date());
+const PALETTE=[{bg:'#C8E0F7',border:'#2F7DC8',text:'#0C3666'},{bg:'#B8ECD8',border:'#1A9966',text:'#074D30'},{bg:'#FAE2B0',border:'#D4820A',text:'#5C3200'},{bg:'#F5C6D8',border:'#C93B6A',text:'#5E0F2D'},{bg:'#D5CFFC',border:'#6B5CE7',text:'#2B1785'},{bg:'#FFD8B8',border:'#D4620A',text:'#5C2200'},{bg:'#C8F0C0',border:'#2A9A18',text:'#0F4408'},{bg:'#E8D8F8',border:'#8B3FCC',text:'#3A0D6E'}];
+const DAYS=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+function color(ti){return PALETTE[ti%PALETTE.length];}
+function getWeekNumber(d){const dt=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const day=dt.getUTCDay()||7;dt.setUTCDate(dt.getUTCDate()+4-day);const y=new Date(Date.UTC(dt.getUTCFullYear(),0,1));return Math.ceil((((dt-y)/86400000)+1)/7);}
+function getMonday(d){const day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1),m=new Date(d);m.setDate(diff);m.setHours(0,0,0,0);return m;}
+function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
+function fmtDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function fmtDisplay(d){return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});}
+function getWeekDates(){return Array.from({length:7},(_,i)=>addDays(weekStart,i));}
+function workingDayOffset(start,n){if(n===0)return start;let d=new Date(start),c=0;while(c<n){d.setDate(d.getDate()+1);const day=d.getDay();if(day!==0&&day!==6)c++;}return fmtDate(d);}
+
+onValue(planningRef,snap=>{
+  state=snap.val();
+  if(!state)return;
+  if(!state.notes)state.notes={};
+  if(!state.taskNotes)state.taskNotes={};
+  if(!state.taskAttachments)state.taskAttachments={};
+  if(!state.realise)state.realise={};
+  document.getElementById('sync-dot').className='sync-dot ok';
+  document.getElementById('sync-label').textContent='En direct';
+  document.getElementById('loading').style.display='none';
+  document.getElementById('grid-wrap').style.display='';
+  if(state.chantiers){document.getElementById('chantiers-box').style.display='';document.getElementById('chantiers-content').textContent=state.chantiers;}
+  render();
+});
+
+function render(){
+  if(!state)return;
+  const dates=getWeekDates(),today=fmtDate(new Date()),wn=getWeekNumber(weekStart);
+  document.getElementById('week-label').textContent=`Semaine ${wn} — ${fmtDisplay(dates[0])} au ${fmtDisplay(dates[6])}`;
+  const head=document.getElementById('grid-head');
+  head.innerHTML='<tr><th class="team-col">Équipe</th>'+dates.map((d,i)=>{const isWe=i>=5,isToday=fmtDate(d)===today;let cls=isWe?'weekend-head':'';if(isToday)cls='today-head';return`<th class="${cls}">${DAYS[i]}<br><span style="font-weight:400;font-size:11px;">${fmtDisplay(d)}</span></th>`;}).join('')+'</tr>';
+
+  const startMap={},contMap={};
+  state.tasks.forEach(task=>{
+    const sk=`${task.team}_${task.date}`;if(!startMap[sk])startMap[sk]=[];startMap[sk].push(task);
+    const dur=task.duration||1;for(let i=1;i<dur;i++){const ck=`${task.team}_${workingDayOffset(task.date,i)}`;if(!contMap[ck])contMap[ck]=[];contMap[ck].push(task);}
+  });
+
+  const body=document.getElementById('grid-body');body.innerHTML='';
+  state.teams.forEach((name,ti)=>{
+    const c=color(ti),tr=document.createElement('tr');
+    const nameTd=document.createElement('td');nameTd.className='team-name';nameTd.style.borderLeft=`4px solid ${c.border}`;
+    nameTd.innerHTML=`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c.border};margin-right:4px;"></span>${name}`;
+    tr.appendChild(nameTd);
+    dates.forEach((d,di)=>{
+      const dateStr=fmtDate(d),isWe=di>=5;
+      const td=document.createElement('td');td.className='day-cell'+(isWe?' weekend':'')+(fmtDate(d)===today?' today':'');
+      if(isWe){td.innerHTML='<span class="no-we">week-end</span>';tr.appendChild(td);return;}
+      const sk=`${ti}_${dateStr}`;const starts=startMap[sk]||[],conts=contMap[sk]||[];
+      conts.forEach(task=>{const card=document.createElement('div');card.className='task-cont';card.style.background=c.bg;card.style.borderLeftColor=c.border;card.style.color=c.text;card.textContent='↳ '+task.name;td.appendChild(card);});
+      starts.forEach(task=>{
+        const card=document.createElement('div');card.className='task-card';card.style.background=c.bg;card.style.borderLeftColor=c.border;card.style.color=c.text;
+        const dur=task.duration||1;card.textContent=(task.locked?'🔒 ':'')+task.name;
+        if(dur>1){const b=document.createElement('span');b.className='task-dur';b.textContent=dur+'j';card.appendChild(b);}
+        td.appendChild(card);
+        const noteVal=(state.taskNotes&&state.taskNotes[task.id])||'';
+        if(noteVal){const np=document.createElement('div');np.className='task-note';np.style.color=c.text;np.textContent='📝 '+noteVal;td.appendChild(np);}
+        const atts=(state.taskAttachments&&state.taskAttachments[task.id])||[];
+        if(atts.length>0){const ap=document.createElement('div');ap.className='task-attach';ap.style.color=c.text;ap.textContent=`📎 ${atts.length} fichier${atts.length>1?'s':''}`;ap.addEventListener('click',()=>atts.forEach(a=>window.open(a.url,'_blank')));td.appendChild(ap);}
+      });
+      const rv=state.realise&&state.realise[`${ti}_${dateStr}`];
+      if(rv){const rrow=document.createElement('div');rrow.className='realise-row';rrow.innerHTML=`<span>✅</span><span class="realise-val">${rv}</span>`;td.appendChild(rrow);}
+      const nv=state.notes&&state.notes[`${ti}_${dateStr}`];
+      if(nv){const dn=document.createElement('div');dn.className='day-note-val';dn.textContent=nv;td.appendChild(dn);}
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+}
+document.getElementById('prev').addEventListener('click',()=>{weekStart=addDays(weekStart,-7);render();});
+document.getElementById('next').addEventListener('click',()=>{weekStart=addDays(weekStart,7);render();});
+</script>
+</body>
+</html>
