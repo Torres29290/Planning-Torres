@@ -7,6 +7,7 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:system-ui,sans-serif;background:#e8e8e5;color:#1a1a18;padding:16px;font-size:15px;}
+.sticky-top{position:sticky;top:0;z-index:40;background:#e8e8e5;padding-top:8px;margin-top:-8px;}
 h1{font-size:22px;font-weight:700;margin-bottom:2px;}
 .subtitle{font-size:13px;color:#999;margin-bottom:12px;}
 .toolbar{display:flex;align-items:center;gap:7px;padding:8px 0 12px;flex-wrap:wrap;}
@@ -38,8 +39,11 @@ h1{font-size:22px;font-weight:700;margin-bottom:2px;}
 .teams-panel{background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:14px;margin-bottom:12px;display:none;}
 .teams-panel.open{display:block;}
 .teams-panel h3{font-size:14px;font-weight:600;margin-bottom:10px;}
-.team-row-edit{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+.team-row-edit{display:flex;align-items:center;gap:8px;margin-bottom:7px;cursor:default;}
 .team-row-edit input{font-size:13px;padding:5px 8px;border:1px solid #ddd;border-radius:7px;flex:1;outline:none;}
+.team-drag-handle{font-size:16px;cursor:grab;color:#bbb;flex-shrink:0;padding:0 2px;user-select:none;}
+.team-drag-handle:active{cursor:grabbing;}
+.team-row-edit.drag-over-team{border-top:2px solid #378ADD;}
 .color-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
 .drag-nav-zone{position:fixed;top:0;width:72px;height:100vh;z-index:50;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .2s;}
 .drag-nav-zone.left{left:0;background:linear-gradient(to right,rgba(55,138,221,.28),transparent);}
@@ -72,15 +76,16 @@ td.day-cell.mobile-target{outline:2px dashed #185FA5;background:rgba(55,138,221,
 .task-card .dur-badge{display:inline-block;font-size:11px;font-weight:500;opacity:.65;margin-left:4px;background:rgba(0,0,0,.1);border-radius:3px;padding:0 3px;}
 .task-note-preview{font-size:12px;cursor:pointer;padding:1px 0 3px 2px;opacity:.75;line-height:1.3;margin-bottom:2px;}
 .task-note-preview:hover{opacity:1;text-decoration:underline;}
+.task-address{font-size:12px;padding:1px 0 3px 2px;opacity:.8;line-height:1.3;margin-bottom:2px;font-style:italic;}
 .task-attach-preview{font-size:12px;padding:1px 0 3px 2px;opacity:.7;cursor:pointer;}
 .task-attach-preview:hover{opacity:1;}
 .task-cont{border-radius:7px;padding:4px 8px;font-size:12px;font-style:italic;margin-bottom:3px;opacity:.65;border-left:3px solid transparent;user-select:none;}
-.realise-row{display:flex;align-items:center;gap:4px;margin:4px 0 3px;}
-.realise-emoji{font-size:14px;flex-shrink:0;}
-.realise-input{flex:1;font-size:13px;border:1px solid transparent;border-radius:5px;padding:3px 5px;font-family:inherit;color:#1a5c1a;background:rgba(200,240,192,.35);outline:none;min-width:0;}
-.realise-input:hover{background:rgba(200,240,192,.65);border-color:#5DCAA5;}
-.realise-input:focus{background:#f0fff0;border-color:#2A9A18;}
-.realise-input::placeholder{color:#aaa;font-style:italic;font-size:12px;}
+
+
+
+
+
+
 .day-note-wrap{margin-top:2px;}
 .day-note{width:100%;font-size:13px;border:1px solid transparent;border-radius:5px;padding:3px 5px;font-family:inherit;color:#444;background:transparent;outline:none;line-height:1.4;resize:none;overflow:hidden;min-height:26px;}
 .day-note:hover{background:rgba(255,255,255,.75);border-color:#ddd;} .day-note:focus{background:#fffef5;border-color:#EF9F27;}
@@ -108,6 +113,7 @@ td.day-cell.mobile-target{outline:2px dashed #185FA5;background:rgba(55,138,221,
 <div class="drag-nav-zone left" id="nav-left"><span class="arrow">◀</span></div>
 <div class="drag-nav-zone right" id="nav-right"><span class="arrow">▶</span></div>
 
+<div class="sticky-top">
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;flex-wrap:wrap;gap:8px;">
   <h1>📋 Planning Torres</h1>
   <div class="sync-row"><span class="sync-dot" id="sync-dot"></span><span class="sync-label" id="sync-label">Connexion…</span></div>
@@ -156,6 +162,7 @@ td.day-cell.mobile-target{outline:2px dashed #185FA5;background:rgba(55,138,221,
   </div>
 </div>
 
+</div><!-- end sticky-top -->
 <div id="loading" class="loading">⏳ Chargement du planning…</div>
 <div class="grid-wrap" id="grid-wrap" style="display:none;">
   <table id="grid"><thead id="grid-head"></thead><tbody id="grid-body"></tbody></table>
@@ -181,7 +188,8 @@ td.day-cell.mobile-target{outline:2px dashed #185FA5;background:rgba(55,138,221,
     <label>Équipe</label><select id="et-team"></select>
     <label>Date de début</label><input type="date" id="et-date" />
     <label>Durée (jours)</label><input type="number" id="et-dur" min="1" max="60" value="1" />
-    <label>Note</label><textarea id="et-note" placeholder="Adresse, consigne, matériaux…"></textarea>
+    <label>Note</label><textarea id="et-note" placeholder="Consigne, matériaux…"></textarea>
+    <label>📍 Adresse du chantier</label><input type="text" id="et-address" placeholder="Ex: 12 rue des Lilas, Brest" />
     <label>📎 Liens fichiers (Google Drive, Dropbox…)</label>
     <div id="attach-list" style="margin-bottom:8px;"></div>
     <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;">
@@ -217,7 +225,7 @@ const planningRef = ref(db,'planning');
 
 const DEFAULT_STATE = {
   teams:['Éq. 1','Éq. 2','Éq. 3','Éq. 4','Éq. 5'],
-  tasks:[],notes:{},taskNotes:{},taskAttachments:{},realise:{},chantiers:'',taskId:0
+  tasks:[],notes:{},taskNotes:{},taskAddresses:{},taskAttachments:{},realise:{},chantiers:'',taskId:0
 };
 
 let state=null, weekStart=getMonday(new Date());
@@ -272,7 +280,7 @@ onValue(planningRef,snap=>{
   const data=snap.val();
   if(data){
     state=data;
-    ['notes','taskNotes','taskAttachments','realise'].forEach(k=>{if(!state[k])state[k]={};});
+    ['notes','taskNotes','taskAttachments','realise','taskAddresses'].forEach(k=>{if(!state[k])state[k]={};});
     if(!state.tasks)state.tasks=[];
     if(!state.teams)state.teams=[...DEFAULT_STATE.teams];
     if(state.chantiers===undefined)state.chantiers='';
@@ -363,11 +371,40 @@ function renderTeamsPanel(){
   if(prev&&parseInt(prev)<state.teams.length)sel.value=prev;
   document.getElementById('et-team').innerHTML=state.teams.map((n,i)=>`<option value="${i}">${n}</option>`).join('');
   const rows=document.getElementById('team-rows');rows.innerHTML='';
+  let dragTeamIdx=null;
   state.teams.forEach((name,ti)=>{
-    const c=color(ti),row=document.createElement('div');row.className='team-row-edit';
-    row.innerHTML=`<span class="color-dot" style="background:${c.border}"></span><input type="text" value="${name}" data-ti="${ti}" />${state.teams.length>1?`<button class="btn danger sm" data-del="${ti}">✕</button>`:''}`;
+    const c=color(ti),row=document.createElement('div');
+    row.className='team-row-edit';row.draggable=true;row.dataset.ti=ti;
+    row.innerHTML=`<span class="team-drag-handle" title="Glisser pour réordonner">⠿</span><span class="color-dot" style="background:${c.border}"></span><input type="text" value="${name}" data-ti="${ti}" />${state.teams.length>1?`<button class="btn danger sm" data-del="${ti}">✕</button>`:''}`;
     row.querySelector('input').addEventListener('change',e=>{state.teams[ti]=e.target.value.trim()||name;save();renderTeamsPanel();renderGrid();});
     const db=row.querySelector('[data-del]');if(db)db.addEventListener('click',()=>deleteTeam(ti));
+
+    // Drag to reorder
+    row.addEventListener('dragstart',e=>{dragTeamIdx=ti;e.dataTransfer.effectAllowed='move';row.style.opacity='.5';});
+    row.addEventListener('dragend',()=>{row.style.opacity='';document.querySelectorAll('.team-row-edit').forEach(r=>r.classList.remove('drag-over-team'));});
+    row.addEventListener('dragover',e=>{e.preventDefault();row.classList.add('drag-over-team');});
+    row.addEventListener('dragleave',()=>row.classList.remove('drag-over-team'));
+    row.addEventListener('drop',e=>{
+      e.preventDefault();row.classList.remove('drag-over-team');
+      if(dragTeamIdx===null||dragTeamIdx===ti)return;
+      // Reorder teams
+      const fromIdx=dragTeamIdx,toIdx=ti;
+      const teamsCopy=[...state.teams];
+      const [moved]=teamsCopy.splice(fromIdx,1);
+      teamsCopy.splice(toIdx,0,moved);
+      state.teams=teamsCopy;
+      // Update task team indices
+      state.tasks=state.tasks.map(task=>{
+        let newTeam=task.team;
+        if(task.team===fromIdx) newTeam=toIdx;
+        else if(fromIdx<toIdx && task.team>fromIdx && task.team<=toIdx) newTeam=task.team-1;
+        else if(fromIdx>toIdx && task.team>=toIdx && task.team<fromIdx) newTeam=task.team+1;
+        return {...task,team:newTeam};
+      });
+      dragTeamIdx=null;
+      save();renderTeamsPanel();renderGrid();
+    });
+
     rows.appendChild(row);
   });
 }
@@ -425,6 +462,7 @@ function openEditTask(taskId){
   document.getElementById('et-date').value=task.date;
   document.getElementById('et-dur').value=task.duration||1;
   document.getElementById('et-note').value=(state.taskNotes&&state.taskNotes[taskId])||'';
+  document.getElementById('et-address').value=(state.taskAddresses&&state.taskAddresses[taskId])||'';
   renderAttachList(taskId);
   document.getElementById('edit-task-modal').classList.add('open');
   setTimeout(()=>document.getElementById('et-name').focus(),50);
@@ -442,6 +480,8 @@ document.getElementById('et-ok').addEventListener('click',()=>{
   task.duration=newDur;
   if(!state.taskNotes)state.taskNotes={};
   state.taskNotes[editTaskTarget]=document.getElementById('et-note').value;
+  if(!state.taskAddresses)state.taskAddresses={};
+  state.taskAddresses[editTaskTarget]=document.getElementById('et-address').value;
   if(cascadeMode&&newDur>oldDur){
     const addedDays=newDur-oldDur;
     const lastOldDay=workingDayOffset(task.date,oldDur-1);
@@ -549,6 +589,12 @@ function renderGrid(){
 
         td.appendChild(card);
 
+        const addrVal=(state.taskAddresses&&state.taskAddresses[task.id])||'';
+        if(addrVal){
+          const ap=document.createElement('div');ap.className='task-address';ap.style.color=c.text;
+          ap.textContent='📍 '+addrVal;
+          ap.addEventListener('click',()=>openEditTask(task.id));td.appendChild(ap);
+        }
         if(noteVal){
           const np=document.createElement('div');np.className='task-note-preview';np.style.color=c.text;
           np.textContent='📝 '+noteVal.substring(0,50)+(noteVal.length>50?'…':'');
@@ -561,14 +607,7 @@ function renderGrid(){
         }
       });
 
-      // Réalisé
-      const rrow=document.createElement('div');rrow.className='realise-row';
-      const remoji=document.createElement('span');remoji.className='realise-emoji';remoji.textContent='✅';
-      const ri=document.createElement('input');ri.type='text';ri.className='realise-input';ri.placeholder='Réalisé…';
-      ri.value=(state.realise&&state.realise[`${ti}_${dateStr}`])||'';
-      ri.addEventListener('change',e=>{if(!state.realise)state.realise={};state.realise[`${ti}_${dateStr}`]=e.target.value;save();});
-      ri.addEventListener('dragover',e=>e.stopPropagation());
-      rrow.appendChild(remoji);rrow.appendChild(ri);td.appendChild(rrow);
+
 
       // Note du jour
       const dw=document.createElement('div');dw.className='day-note-wrap';
